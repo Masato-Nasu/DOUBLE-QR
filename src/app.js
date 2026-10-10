@@ -100,7 +100,39 @@ $('plain').onclick=async()=>{++generation;setGenerationBusy(true);$('output').hi
   const size=prepared?.storedBytes??utf8($('hidden').value).length;
   q=plainPad($('public').value,0,paddingVersionsFor($('public').value,size)[0]??PAD_VERSION);
  }else q=mode==='36'?plainPad($('public').value):mode==='20'?plainLarge($('public').value):plainQR($('public').value);current={plain:q.matrix,matrix:q.matrix,plainOnly:true,accepted:true};$('checks').replaceChildren();$('blockTable').replaceChildren();$('budgetInfo').textContent='裏メッセージは含まれていません。';await showView('plain');status('makeStatus','通常QRを作成しました。');}catch(e){status('makeStatus',e.message,true);}finally{setGenerationBusy(false);}};
-$('share').onclick=async()=>{if(!pngBlob)return;const file=new File([pngBlob],$('save').download,{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'DOUBLE QR'});else{download(pngBlob,$('save').download);status('makeStatus','画像を保存しました。画像ファイルを共有してください。');}}catch(e){if(e.name!=='AbortError')status('makeStatus','共有できませんでした。「保存」をお使いください。',true);}};
+function showShareHelp(text){
+ $('shareHelpText').textContent=text;
+ $('shareHelpText').classList.remove('error');
+ $('copyQR').hidden=!(navigator.clipboard?.write&&typeof ClipboardItem==='function');
+ $('shareHelp').showModal();
+}
+$('share').onclick=async()=>{
+ if(!pngBlob)return;
+ try{
+  if(typeof navigator.share!=='function'){
+   showShareHelp('このブラウザは画像の直接共有に対応していません。');
+   return;
+  }
+  const file=new File([pngBlob],$('save').download,{type:'image/png'});
+  if(typeof navigator.canShare==='function'&&!navigator.canShare({files:[file]})){
+   showShareHelp('このブラウザはQR画像ファイルの直接共有に対応していません。');
+   return;
+  }
+  await navigator.share({files:[file],title:'DOUBLE QR'});
+ }catch(e){
+  if(e?.name!=='AbortError')showShareHelp('共有画面を開けませんでした。画像をコピーするか「保存」をご利用ください。');
+ }
+};
+$('copyQR').onclick=async()=>{
+ if(!pngBlob)return;
+ try{
+  await navigator.clipboard.write([new ClipboardItem({'image/png':pngBlob})]);
+  status('shareHelpText','画像をコピーしました。LINEやメールの入力欄に貼り付けられます。');
+ }catch{
+  status('shareHelpText','画像をコピーできませんでした。「保存」から画像ファイルを共有してください。',true);
+ }
+};
+$('closeShareHelp').onclick=()=>$('shareHelp').close();
 $('enlarge').onclick=()=>{if(!current?.accepted||!pngURL||currentView==='diff')return;$('zoom').classList.toggle('large-qr',current.qrVersion>=30);$('zoomImage').src=pngURL;$('zoom').showModal();};$('closeZoom').onclick=()=>$('zoom').close();
 async function loadFile(file){if(file.size>24*1024*1024)throw Error('画像は24MB以下にしてください。');let bitmap;try{bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});}catch{const url=URL.createObjectURL(file);try{bitmap=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=url;});}catch{throw Error('この画像を開けません。JPEGまたはPNGを選んでください。');}finally{URL.revokeObjectURL(url);}}const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();return ctx.getImageData(0,0,canvas.width,canvas.height);}
 function showDecoded(value){$('decoded').hidden=false;$('publicResult').textContent=value.public;$('openPublic').hidden=true;try{const u=new URL(value.public);if(['http:','https:'].includes(u.protocol)){$('openPublic').href=u.href;$('openPublic').hidden=false;}}catch{}$('secretMessage').hidden=value.hidden===undefined;secret=value.hidden??'';$('secretResult').textContent=secret;}
