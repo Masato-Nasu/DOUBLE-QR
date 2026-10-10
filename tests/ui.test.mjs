@@ -36,6 +36,26 @@ test('48-byte Japanese message auto-selects 1x and keeps public QR readable',asy
  assert.equal($('save').hidden,false);
  assert.equal(document.querySelectorAll('#checks .success').length,3);
 });
+test('screen reading opens a full-screen view and keeps QR complete',()=>{
+ const dialog=$('zoom');
+ dialog.showModal=()=>{dialog.open=true;};
+ dialog.close=()=>{dialog.open=false;};
+ const screenButton=$('enlarge');
+ assert.equal(screenButton.hidden,false);
+ assert(screenButton.compareDocumentPosition($('qr')) & 4,'button is before the QR');
+ screenButton.click();
+ assert.equal(dialog.open,true);
+ assert.match($('zoomImage').src,/^blob:/);
+ $('closeZoom').click();
+ assert.equal(dialog.open,false);
+});
+test('invalid strength never leaves a QR shown for scanning',async()=>{
+ $('rep').value='5';
+ await $('maker').onsubmit(submit);
+ assert.equal($('output').hidden,true);
+ assert.match($('makeStatus').textContent,/自動/);
+ $('rep').value='auto';
+});
 test('upload previous PNG, restore SECRET and reject wrong key',async()=>{
  const p=PNG.sync.read(fs.readFileSync('tests/legacy-0.png'));globalThis.createImageBitmap=async()=>new ImageData(new Uint8ClampedArray(p.data),p.width,p.height);
  Object.defineProperty($('file'),'files',{value:[{size:1000}]});$('readKey').value='demo-key';await $('file').onchange();assert.equal($('publicResult').textContent,'https://example.com');assert.equal($('secretResult').textContent,'SECRET');assert.equal($('secretMessage').hidden,false);
