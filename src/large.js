@@ -9,7 +9,7 @@ import {utf8,concat,sha256,packetBytes} from './core.js';
 import {decodePacket} from './packed.js';
 
 export const LARGE_VERSION=20,LARGE_N=4*LARGE_VERSION+17;
-function plainLarge(publicText){
+export function plainLarge(publicText){
  if(!publicText.trim())throw Error('表の内容を入力してください。');
  if(utf8(publicText).length>150)throw Error('表はUTF-8で150バイト以内にしてください。');
  const mode=/^[0-9]+$/.test(publicText)?'numeric':/^[0-9A-Z $%*+./:\-]+$/.test(publicText)?'alphanumeric':'byte';
