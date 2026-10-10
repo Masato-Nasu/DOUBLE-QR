@@ -1,4 +1,5 @@
 name: Publish DOUBLE QR
+# Deploy the committed dist/ assets (not the source tree).
 on:
   push:
     branches: [main]
