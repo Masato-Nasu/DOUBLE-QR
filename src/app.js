@@ -2,6 +2,8 @@ import {build,plainQR,pixels,N,utf8} from './core.js';
 import {buildPacked,maxPackedBytes} from './packed.js';
 import {prepareHidden} from './compression.js';
 import {buildLarge,maxLargeBytes,plainLarge} from './large.js';
+import {createPadding} from './pad-channel.js';
+import {plainPad,padCapacity} from './pad-matrix.js';
 import {configureReader,decodeBoth,recover,verify,createCameraAccumulator} from './reader.js';
 import {benchmark,capacity,statistics,LABELS} from './experiments.js';
 const $=id=>document.getElementById(id);
@@ -18,10 +20,12 @@ function showTab(which){const reading=which==='read';$('makePanel').hidden=readi
 $('makeTab').onclick=()=>showTab('make');$('readTab').onclick=()=>showTab('read');
 document.querySelectorAll('[data-password]').forEach(button=>button.onclick=()=>{const field=$(button.dataset.password);field.type=field.type==='password'?'text':'password';button.textContent=field.type==='password'?'表示':'隠す';button.setAttribute('aria-label',field.type==='password'?'鍵を表示':'鍵を隠す');});
 function updateCapacity(){
- const bytes=utf8($('hidden').value).length,max=$('qrVersion').value==='20'?maxLargeBytes(1):maxPackedBytes(1);
+ const bytes=utf8($('hidden').value).length,mode=$('qrVersion').value,max=mode==='36'?padCapacity($('public').value):mode==='20'?maxLargeBytes(1):maxPackedBytes(1);
  $('byteCount').textContent=`${bytes} / ${max} bytes`;
- const best=[5,3,1].find(rep=>bytes<=($('qrVersion').value==='20'?maxLargeBytes(rep):maxPackedBytes(rep)));
+ const best=mode==='36'?1:[5,3,1].find(rep=>bytes<=(mode==='20'?maxLargeBytes(rep):maxPackedBytes(rep)));
  const experimenting=$('compression').value==='auto';
+ $('rep').disabled=mode==='36';
+ $('versionHint').textContent=mode==='36'?'Version 36・161×161マスの余白データを使う実験モードです。普通の白黒QRですが、規格指定の余白値とは異なります。生成画像の自動検査とスマートフォン実機の成功は別です。強度は1重固定。':mode==='20'?'Version 20は通常規格の白黒QRです。PC画面からの実機読み取りは未検証です。':'実機で裏の読み取りに成功した標準版です。通常の白黒QRを保ちます。';
  $('capacityHint').textContent=experimenting
   ?`原文${bytes}バイト。圧縮後の容量は「QRを作る」で測定します（圧縮で小さくならない文章もあります）。`
   :bytes>max
@@ -29,7 +33,7 @@ function updateCapacity(){
   :`自動設定では最大${best}重で試します。実際の読み取りは生成時に検査します。`;
  $('capacityHint').classList.toggle('error',bytes>max&&!experimenting);
 }
-$('hidden').oninput=updateCapacity;$('compression').onchange=updateCapacity;$('qrVersion').onchange=updateCapacity;updateCapacity();
+$('hidden').oninput=updateCapacity;$('public').oninput=updateCapacity;$('compression').onchange=updateCapacity;$('qrVersion').onchange=updateCapacity;updateCapacity();
 $('maker').addEventListener('input',()=>{generation++;setGenerationBusy(false);current=null;$('output').hidden=true;status('makeStatus','');});
 function setGenerationBusy(busy){$('generate').disabled=busy;$('plain').disabled=busy;}
 function drawDiff(){const n=Math.sqrt(current.matrix.length),canvas=$('qr'),context=canvas.getContext('2d');canvas.width=canvas.height=(n+12)*14;context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);for(let r=0;r<n;r++)for(let c=0;c<n;c++){const i=r*n+c,a=current.plain[i],b=current.matrix[i];context.fillStyle=a===b?(a?'#cbd0ca':'#fff'):(b?'#0064d2':'#d74623');context.fillRect((c+6)*14,(r+6)*14,14,14);}}
@@ -41,30 +45,41 @@ async function showView(view){if(!current)return;const seq=++viewSequence,snapsh
 }
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>showView(b.dataset.view).catch(e=>status('makeStatus',e.message,true)));
 function renderChecks(){const out=$('checks');out.replaceChildren();if(!current.checks)return;for(const [name,ok]of [['表 · ZXing',current.checks.zxing],['表 · jsQR',current.checks.jsqr],['裏 · 本文一致',current.checks.hidden]]){const row=document.createElement('div');row.className='check-row';const label=document.createElement('span');label.textContent=name;const state=document.createElement('strong');state.className=ok?'success':'failure';state.textContent=ok?'成功':'失敗';row.append(label,state);out.append(row);}$('budgetInfo').textContent=`変更 ${current.budget.changed_modules}マス（${current.budget.changed_percent.toFixed(2)}%）。訂正残量の最小値 ${current.budget.min_remaining}語。各ブロック2語以上を保存条件にしています。`;$('blockTable').replaceChildren(rowTable(['ブロック','変更語数','訂正限界','残り'],current.budget.blocks.map(b=>[b.block,b.changed_codewords,b.correction_limit,b.remaining])));}
-$('maker').onsubmit=async event=>{event.preventDefault();if(!globalThis.crypto?.subtle){status('makeStatus','HTTPSまたはlocalhostで開いてください。',true);return;}const id=++generation;setGenerationBusy(true);$('output').hidden=true;status('makeStatus','QRを作成・検査しています…');try{const data=input(),bytes=utf8(data.hidden).length,max=data.qrVersion===20?maxLargeBytes(1):maxPackedBytes(1);
+$('maker').onsubmit=async event=>{event.preventDefault();if(!globalThis.crypto?.subtle){status('makeStatus','HTTPSまたはlocalhostで開いてください。',true);return;}const id=++generation;setGenerationBusy(true);$('output').hidden=true;status('makeStatus','QRを作成・検査しています…');try{const data=input(),bytes=utf8(data.hidden).length,max=data.qrVersion===36?padCapacity(data.publicText):data.qrVersion===20?maxLargeBytes(1):maxPackedBytes(1);
  if(!data.compress&&bytes>max)throw Error(`裏は最大${max}バイトです（現在${bytes}バイト）。入力を短くしてください。`);
  const prepared=data.compress?await prepareHidden(data.hidden,true):null;
  if(id!==generation)return;
  const stored=prepared?.storedBytes??bytes;
  if(stored>max)throw Error(`保存容量を超えています。原文${bytes}バイト、${data.compress?'圧縮後':'保存'}${stored}バイト。上限${max}バイトです。`);
  let result=null;
- for(const rep of data.auto?[5,3,1]:[data.rep]){
-  if(stored>(data.qrVersion===20?maxLargeBytes(rep):maxPackedBytes(rep)))continue;
-  const q=data.qrVersion===20?await buildLarge(data.publicText,data.hidden,data.key,rep,prepared):await buildPacked(data.publicText,data.hidden,data.key,rep,prepared);
-  if(id!==generation)return;
-  if(!q.budget.budget_ok)continue;
-  const checks=await verify(toImageData(pixels(q.matrix)),data.publicText,data.hidden,data.key,rep);
-  if(id!==generation)return;
-  result={...q,checks,accepted:checks.zxing&&checks.jsqr&&checks.hidden};
-  if(result.accepted)break;
+ if(data.qrVersion===36){
+  for(const mask of [0,1,2,3,4,5,6,7]){
+   const q=await createPadding(data.publicText,data.hidden,data.key,prepared,mask);
+   if(id!==generation)return;
+   const checks=await verify(toImageData(pixels(q.matrix,8,4)),data.publicText,data.hidden,data.key,1);
+   if(id!==generation)return;
+   result={...q,checks,accepted:checks.zxing&&checks.jsqr&&checks.hidden};
+   if(result.accepted)break;
+  }
+ }else{
+  for(const rep of data.auto?[5,3,1]:[data.rep]){
+   if(stored>(data.qrVersion===20?maxLargeBytes(rep):maxPackedBytes(rep)))continue;
+   const q=data.qrVersion===20?await buildLarge(data.publicText,data.hidden,data.key,rep,prepared):await buildPacked(data.publicText,data.hidden,data.key,rep,prepared);
+   if(id!==generation)return;
+   if(!q.budget.budget_ok)continue;
+   const checks=await verify(toImageData(pixels(q.matrix)),data.publicText,data.hidden,data.key,rep);
+   if(id!==generation)return;
+   result={...q,checks,accepted:checks.zxing&&checks.jsqr&&checks.hidden};
+   if(result.accepted)break;
+  }
  }
  if(!result)throw Error('この文章は指定した強度の容量を超えています。「自動」を選ぶか裏を短くしてください。');
  if(!result.accepted)throw Error('読み取り検査に合格するQRを作成できませんでした。読めないQRは表示しません。文章を短くして再試行してください。');
  current=result;renderChecks();await showView('double');
- status('makeStatus',`作成しました。表・裏の自動検査を通過しました（${current.repetitions}重${data.auto?'・自動選択':''}）${current.compressed?`。圧縮: ${bytes} → ${stored}バイト`:''}。${data.qrVersion===20?'大きいQRは実験機能であり、実機読み取りはまだ未確認です。':''}画面を読み取る場合は「全画面でQRを表示」を押してください。`);}catch(e){if(id===generation){current=null;status('makeStatus',e.message,true);}}finally{if(id===generation)setGenerationBusy(false);}};
-$('plain').onclick=async()=>{++generation;setGenerationBusy(true);$('output').hidden=true;status('makeStatus','通常QRを作成しています…');try{const q=$('qrVersion').value==='20'?plainLarge($('public').value):plainQR($('public').value);current={plain:q.matrix,matrix:q.matrix,plainOnly:true,accepted:true};$('checks').replaceChildren();$('blockTable').replaceChildren();$('budgetInfo').textContent='裏メッセージは含まれていません。';await showView('plain');status('makeStatus','通常QRを作成しました。');}catch(e){status('makeStatus',e.message,true);}finally{setGenerationBusy(false);}};
+ status('makeStatus',`作成しました。表・裏の自動検査を通過しました（${data.qrVersion===36?'余白実験・Version 36':`${current.repetitions}重${data.auto?'・自動選択':''}`}）${current.compressed?`。圧縮: ${bytes} → ${stored}バイト`:''}。${data.qrVersion===36?'余白方式は実機での裏読み取りが未確認です。':data.qrVersion===20?'大きいQRは実機読み取りがまだ未確認です。':''}画面を読み取る場合は「全画面でQRを表示」を押してください。`);}catch(e){if(id===generation){current=null;status('makeStatus',e.message,true);}}finally{if(id===generation)setGenerationBusy(false);}};
+$('plain').onclick=async()=>{++generation;setGenerationBusy(true);$('output').hidden=true;status('makeStatus','通常QRを作成しています…');try{const q=$('qrVersion').value==='36'?plainPad($('public').value):$('qrVersion').value==='20'?plainLarge($('public').value):plainQR($('public').value);current={plain:q.matrix,matrix:q.matrix,plainOnly:true,accepted:true};$('checks').replaceChildren();$('blockTable').replaceChildren();$('budgetInfo').textContent='裏メッセージは含まれていません。';await showView('plain');status('makeStatus','通常QRを作成しました。');}catch(e){status('makeStatus',e.message,true);}finally{setGenerationBusy(false);}};
 $('share').onclick=async()=>{if(!pngBlob)return;const file=new File([pngBlob],$('save').download,{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'DOUBLE QR'});else{download(pngBlob,$('save').download);status('makeStatus','画像を保存しました。画像ファイルを共有してください。');}}catch(e){if(e.name!=='AbortError')status('makeStatus','共有できませんでした。「保存」をお使いください。',true);}};
-$('enlarge').onclick=()=>{if(!current?.accepted||!pngURL||currentView==='diff')return;$('zoomImage').src=pngURL;$('zoom').showModal();};$('closeZoom').onclick=()=>$('zoom').close();
+$('enlarge').onclick=()=>{if(!current?.accepted||!pngURL||currentView==='diff')return;$('zoom').classList.toggle('large-qr',current.qrVersion===36);$('zoomImage').src=pngURL;$('zoom').showModal();};$('closeZoom').onclick=()=>$('zoom').close();
 async function loadFile(file){if(file.size>24*1024*1024)throw Error('画像は24MB以下にしてください。');let bitmap;try{bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});}catch{const url=URL.createObjectURL(file);try{bitmap=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=url;});}catch{throw Error('この画像を開けません。JPEGまたはPNGを選んでください。');}finally{URL.revokeObjectURL(url);}}const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();return ctx.getImageData(0,0,canvas.width,canvas.height);}
 function showDecoded(value){$('decoded').hidden=false;$('publicResult').textContent=value.public;$('openPublic').hidden=true;try{const u=new URL(value.public);if(['http:','https:'].includes(u.protocol)){$('openPublic').href=u.href;$('openPublic').hidden=false;}}catch{}$('secretMessage').hidden=value.hidden===undefined;secret=value.hidden??'';$('secretResult').textContent=secret;}
 let readSequence=0;
