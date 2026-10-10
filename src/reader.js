@@ -90,4 +90,22 @@ export async function recover(image,key,repetitions='auto',decoded){
  }
  throw Error('表は読めましたが、裏を復元できません。鍵を確認し、画像を大きくするか正面から撮り直してください。');
 }
-export async function verify(image,publicText,hidden,key,rep){const codes=await decodeBoth(image);let recovered=false;try{const r=await recover(image,key,rep,codes);recovered=r.public===publicText&&r.hidden===hidden;}catch{}return {zxing:codes.zxing?.public===publicText,jsqr:codes.jsqr?.public===publicText,hidden:recovered,errors:codes.errors};}
+export async function verify(image,publicText,hidden,key,rep,expectedVersion=null){
+ const codes=await decodeBoth(image);
+ let recovered=false;
+ if(expectedVersion===36){
+  const prepared=grayImage(image);
+  for(const code of [codes.zxing,codes.jsqr].filter(Boolean)){
+   for(const threshold of [undefined,128]){
+    try{
+     const r=await readPadding(code.public,sampleGrid(image,code.corners,threshold,PAD_N,prepared),key);
+     if(r.public===publicText&&r.hidden===hidden){recovered=true;break;}
+    }catch{}
+   }
+   if(recovered)break;
+  }
+ }else{
+  try{const r=await recover(image,key,rep,codes);recovered=r.public===publicText&&r.hidden===hidden;}catch{}
+ }
+ return {zxing:codes.zxing?.public===publicText,jsqr:codes.jsqr?.public===publicText,hidden:recovered,errors:codes.errors};
+}
