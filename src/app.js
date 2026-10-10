@@ -57,7 +57,7 @@ $('maker').onsubmit=async event=>{event.preventDefault();if(!globalThis.crypto?.
   for(const mask of [0,1,2,3,4,5,6,7]){
    const q=await createPadding(data.publicText,data.hidden,data.key,prepared,mask);
    if(id!==generation)return;
-   const checks=await verify(toImageData(pixels(q.matrix,8,4)),data.publicText,data.hidden,data.key,1);
+   const checks=await verify(toImageData(pixels(q.matrix,8,4)),data.publicText,data.hidden,data.key,1,36);
    if(id!==generation)return;
    result={...q,checks,accepted:checks.zxing&&checks.jsqr&&checks.hidden};
    if(result.accepted)break;
