@@ -3,6 +3,8 @@ import {readBarcodes,prepareZXingModule,ZXING_WASM_VERSION} from 'zxing-wasm/rea
 import {readGrid,N} from './core.js';
 import {readGridPacked} from './packed.js';
 import {readGridLarge,LARGE_N} from './large.js';
+import {readPadding} from './pad-channel.js';
+import {PAD_N} from './pad-matrix.js';
 export const DECODERS={zxing:'ZXing WASM '+ZXING_WASM_VERSION,jsqr:'jsQR 1.4.0'};
 export function configureReader(overrides){prepareZXingModule({overrides});}
 export function decodeJS(image){
@@ -37,7 +39,7 @@ export function sampleGrid(image,corners,thresholdOverride,n=N,prepared=null){
 // camera frames before authenticating the hidden payload. The stream is kept
 // only in memory and is reset whenever the detected public QR changes.
 export function createCameraAccumulator(){
- const make=()=>new Map([N,LARGE_N].map(n=>[n,[new Int16Array(n*n),new Int16Array(n*n)]]));
+ const make=()=>new Map([N,LARGE_N,PAD_N].map(n=>[n,[new Int16Array(n*n),new Int16Array(n*n)]]));
  let publicText='',count=0,totals=make();
  const reset=()=>{publicText='';count=0;totals=make();};
  const majority=(votes)=>Uint8Array.from(votes,v=>v>0?1:0);
@@ -66,6 +68,9 @@ export function createCameraAccumulator(){
    const grid=majority(votes);
    for(const rep of reps)try{return await readGridLarge(publicText,grid,key,rep);}catch{}
   }
+  for(const votes of totals.get(PAD_N)){
+   try{return await readPadding(publicText,majority(votes),key);}catch{}
+  }
   throw Error('裏を復元できませんでした。');
  };
  return{add,recover,reset,get count(){return count;},get publicText(){return publicText;}};
@@ -80,6 +85,8 @@ export async function recover(image,key,repetitions='auto',decoded){
   for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])for(const decode of [readGridPacked,readGrid])try{return await decode(code.public,grid,key,rep);}catch{}
   const largeGrid=sampleGrid(image,code.corners,threshold,LARGE_N,prepared);
   for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])try{return await readGridLarge(code.public,largeGrid,key,rep);}catch{}
+  const padGrid=sampleGrid(image,code.corners,threshold,PAD_N,prepared);
+  try{return await readPadding(code.public,padGrid,key);}catch{}
  }
  throw Error('表は読めましたが、裏を復元できません。鍵を確認し、画像を大きくするか正面から撮り直してください。');
 }
