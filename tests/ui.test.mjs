@@ -29,7 +29,7 @@ test('48-byte Japanese message auto-selects 1x and keeps public QR readable',asy
  $('public').value='https://masato-lab.pages.dev/';
  $('hidden').value='あ'.repeat(16);
  $('hidden').dispatchEvent(new dom.window.Event('input',{bubbles:true}));
- assert.match($('byteCount').textContent,/48 \\/ 123 bytes/);
+ assert.equal($('byteCount').textContent,'48 / 123 bytes');
  assert.equal($('rep').value,'auto');
  await $('maker').onsubmit(submit);
  assert.match($('makeStatus').textContent,/1重・自動選択/);
