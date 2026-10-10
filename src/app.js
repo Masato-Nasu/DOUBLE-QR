@@ -25,6 +25,7 @@ function updateCapacity(){
  const best=mode==='36'?1:[5,3,1].find(rep=>bytes<=(mode==='20'?maxLargeBytes(rep):maxPackedBytes(rep)));
  const experimenting=$('compression').value==='auto';
  $('rep').disabled=mode==='36';
+ $('repHint').textContent=mode==='36'?'余白実験の容量上限は、表の長さから計算します。1重固定で、一般QRと裏の復元を自動検査します。':mode==='20'?'Version 20の1重は最大255バイト（圧縮後）。実際の検査は作成時に行います。':'標準版の上限は1重123バイト・3重35バイト・5重17バイトです。表と裏を自動検査します。';
  $('versionHint').textContent=mode==='36'?'Version 36・161×161マスの余白データを使う実験モードです。普通の白黒QRですが、規格指定の余白値とは異なります。生成画像の自動検査とスマートフォン実機の成功は別です。強度は1重固定。':mode==='20'?'Version 20は通常規格の白黒QRです。PC画面からの実機読み取りは未検証です。':'実機で裏の読み取りに成功した標準版です。通常の白黒QRを保ちます。';
  $('capacityHint').textContent=experimenting
   ?`原文${bytes}バイト。圧縮後の容量は「QRを作る」で測定します（圧縮で小さくならない文章もあります）。`
