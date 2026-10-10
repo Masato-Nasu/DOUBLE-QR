@@ -1,6 +1,7 @@
 import jsQR from 'jsqr';
 import {readBarcodes,prepareZXingModule,ZXING_WASM_VERSION} from 'zxing-wasm/reader';
 import {readGrid,N} from './core.js';
+import {readGridPacked} from './packed.js';
 export const DECODERS={zxing:'ZXing WASM '+ZXING_WASM_VERSION,jsqr:'jsQR 1.4.0'};
 export function configureReader(overrides){prepareZXingModule({overrides});}
 export function decodeJS(image){
@@ -36,7 +37,7 @@ export async function recover(image,key,repetitions='auto',decoded){
  if(!candidates.length)throw Error('表のQRを読み取れません。QR全体を大きく、正面から撮影してください。');
  for(const code of candidates)for(const threshold of [undefined,128]){
   const grid=sampleGrid(image,code.corners,threshold);
-  for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])try{return await readGrid(code.public,grid,key,rep);}catch{}
+  for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])for(const decode of [readGridPacked,readGrid])try{return await decode(code.public,grid,key,rep);}catch{}
  }
  throw Error('表は読めましたが、裏を復元できません。鍵を確認し、画像を大きくするか正面から撮り直してください。');
 }
