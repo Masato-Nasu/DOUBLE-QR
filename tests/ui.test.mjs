@@ -82,6 +82,30 @@ test('opt-in compression reports stored size and successfully decodes long Japan
  assert.equal(document.querySelectorAll('#checks .success').length,3);
  $('compression').value='off';$('hidden').value='SECRET';
 });
+test('opt-in Version 36 accepts 1679 bytes with ordinary and hidden QR checks',async()=>{
+ $('public').value='https://masato-lab.pages.dev/';
+ $('hidden').value='ABCD'.repeat(419)+'XYZ';
+ $('key').value='screen-lab-key';
+ $('qrVersion').value='36';
+ $('qrVersion').dispatchEvent(new dom.window.Event('change'));
+ $('compression').value='off';
+ $('rep').value='auto';
+ $('hidden').dispatchEvent(new dom.window.Event('input',{bubbles:true}));
+ assert.match($('byteCount').textContent,/1679/);
+ assert.match($('byteCount').textContent,/1868/);
+ assert.equal($('rep').disabled,true);
+ await $('maker').onsubmit(submit);
+ assert.equal($('output').hidden,false,$('makeStatus').textContent);
+ assert.match($('makeStatus').textContent,/Version 36/);
+ assert.equal($('qr').width,(161+12)*14);
+ assert.equal(document.querySelectorAll('#checks .success').length,3);
+ $('qrVersion').value='12';
+ $('qrVersion').dispatchEvent(new dom.window.Event('change'));
+ assert.equal($('rep').disabled,false);
+ $('hidden').value='SECRET';
+ $('public').value='https://example.com';
+ $('key').value='demo-key';
+});
 test('upload previous PNG, restore SECRET and reject wrong key',async()=>{
  const p=PNG.sync.read(fs.readFileSync('tests/legacy-0.png'));globalThis.createImageBitmap=async()=>new ImageData(new Uint8ClampedArray(p.data),p.width,p.height);
  Object.defineProperty($('file'),'files',{value:[{size:1000}]});$('readKey').value='demo-key';await $('file').onchange();assert.equal($('publicResult').textContent,'https://example.com');assert.equal($('secretResult').textContent,'SECRET');assert.equal($('secretMessage').hidden,false);
