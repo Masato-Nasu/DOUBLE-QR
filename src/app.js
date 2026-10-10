@@ -1,6 +1,6 @@
 import {build,plainQR,pixels,N,utf8} from './core.js';
 import {buildPacked,maxPackedBytes} from './packed.js';
-import {configureReader,decodeBoth,recover,verify} from './reader.js';
+import {configureReader,decodeBoth,recover,verify,createCameraAccumulator} from './reader.js';
 import {benchmark,capacity,statistics,LABELS} from './experiments.js';
 const $=id=>document.getElementById(id);
 configureReader({locateFile:path=>new URL('./vendor/'+path,document.baseURI).href});
@@ -67,8 +67,33 @@ $('copySecret').onclick=async()=>{try{await navigator.clipboard.writeText(secret
 let cameraStream=null,cameraToken=0,cameraTimer=null;
 function stopCamera(){cameraToken++;clearTimeout(cameraTimer);if(cameraStream)cameraStream.getTracks().forEach(track=>track.stop());cameraStream=null;$('camera').srcObject=null;$('cameraPanel').hidden=true;$('cameraStart').disabled=false;}
 $('cameraStop').onclick=()=>{stopCamera();status('readStatus','カメラを停止しました。');};
-$('cameraStart').onclick=async()=>{stopCamera();if(!navigator.mediaDevices?.getUserMedia){status('readStatus','この環境ではカメラを使えません。HTTPSで開くか、画像を選んでください。',true);return;}const token=cameraToken;$('cameraStart').disabled=true;status('readStatus','カメラの使用を許可してください。');try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});if(token!==cameraToken){stream.getTracks().forEach(t=>t.stop());return;}cameraStream=stream;$('cameraPanel').hidden=false;$('camera').srcObject=stream;await $('camera').play();status('readStatus','QR全体を枠内に入れて、正面から向けてください。');const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
- const scan=async()=>{if(token!==cameraToken)return;const video=$('camera');if(video.readyState>=2&&video.videoWidth){const scale=Math.min(1,1100/video.videoWidth);canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);ctx.drawImage(video,0,0,canvas.width,canvas.height);const img=ctx.getImageData(0,0,canvas.width,canvas.height);try{const codes=await decodeBoth(img),front=codes.zxing||codes.jsqr;if(token!==cameraToken)return;if(front){selectedImage=img;if($('readKey').value){const value=await recover(img,$('readKey').value,$('readRep').value,codes);if(token!==cameraToken)return;stopCamera();showDecoded(value);status('readStatus','表と裏を読み取りました。');return;}stopCamera();showDecoded({public:front.public});status('readStatus','表を読み取りました。鍵を入力して「読み取る」を押すと裏を復元します。');return;}}catch{if(token===cameraToken)status('readStatus','表を検出しました。正面から近づけるか、鍵を確認してください。');}}
+$('cameraStart').onclick=async()=>{stopCamera();if(!navigator.mediaDevices?.getUserMedia){status('readStatus','この環境ではカメラを使えません。HTTPSで開くか、画像を選んでください。',true);return;}const token=cameraToken;$('cameraStart').disabled=true;status('readStatus','カメラの使用を許可してください。');try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});if(token!==cameraToken){stream.getTracks().forEach(t=>t.stop());return;}cameraStream=stream;$('cameraPanel').hidden=false;$('camera').srcObject=stream;await $('camera').play();status('readStatus','QR全体を枠内に入れて、正面から向けてください。');const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true}),history=createCameraAccumulator();
+ const scan=async()=>{if(token!==cameraToken)return;const video=$('camera');if(video.readyState>=2&&video.videoWidth){const scale=Math.min(1,1600/video.videoWidth);canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);ctx.drawImage(video,0,0,canvas.width,canvas.height);const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+ try{
+  const codes=await decodeBoth(img),front=codes.zxing||codes.jsqr;
+  if(token!==cameraToken)return;
+  if(front){
+   selectedImage=img;
+   if(!$('readKey').value){
+    stopCamera();showDecoded({public:front.public});
+    status('readStatus','表を読み取りました。裏はDOUBLE QR専用の「読む」と作成時の鍵が必要です。');
+    return;
+   }
+   const frames=history.add(img,front),key=$('readKey').value,reps=$('readRep').value;
+   let value=null;
+   if(frames===1){try{value=await recover(img,key,reps,codes);}catch{}}
+   if(!value&&frames>=3&&frames%2===1){try{value=await history.recover(key,reps);}catch{}}
+   if(token!==cameraToken)return;
+   if(value){
+    stopCamera();showDecoded(value);status('readStatus','表と裏を読み取りました。');return;
+   }
+   status('readStatus',`表は検出しています。裏を復元中（${frames}フレーム）。画面のQRを大きく表示し、正面からしっかり写してください。鍵が合っているかも確認してください。`);
+  }else{
+   status('readStatus',history.count?'表のQRが画面から外れました。QR全体を正面に戻してください。':'QRが見つかりません。QR全体を大きく、正面から写してください。');
+  }
+ }catch(e){
+  if(token===cameraToken)status('readStatus','画面を解析できませんでした。カメラを安定させてQRを正面から写してください。');
+ }}
  if(token===cameraToken)cameraTimer=setTimeout(scan,250);};scan();
  }catch(e){if(token===cameraToken){stopCamera();status('readStatus',e.name==='NotAllowedError'?'カメラが許可されていません。ブラウザの設定で許可するか、画像を選んでください。':'カメラを起動できませんでした。画像を選んでください。',true);}}};
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCamera();});window.addEventListener('pagehide',()=>{stopCamera();jobController?.abort();});
