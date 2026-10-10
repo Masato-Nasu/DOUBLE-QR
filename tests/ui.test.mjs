@@ -17,6 +17,16 @@ await import('../src/app.js');
 configureReader({wasmBinary:fs.readFileSync('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm')});
 const $=id=>document.getElementById(id);
 const submit={preventDefault(){}};
+test('requested poem, public URL and automatic size are initial defaults',()=>{
+ assert.equal($('public').value,'https://masato-lab.pages.dev/');
+ assert.equal($('hidden').value,'合歓の木の 在りて終日 三途にて');
+ assert.equal($('qrVersion').value,'auto');
+ assert.equal($('compression').value,'auto');
+ // Preserve all prior normal QR regressions in their explicitly selected mode.
+ $('qrVersion').value='12';$('qrVersion').dispatchEvent(new dom.window.Event('change'));
+ $('compression').value='off';
+ $('public').value='https://example.com';$('hidden').value='SECRET';
+});
 test('simple tabs transfer key and preserve fields',()=>{
  $('key').value='demo-key';$('readTab').click();assert.equal($('readPanel').hidden,false);assert.equal($('makePanel').hidden,true);assert.equal($('readKey').value,'demo-key');$('makeTab').click();assert.equal($('makePanel').hidden,false);
 });
@@ -105,6 +115,33 @@ test('opt-in Version 36 accepts 1679 bytes with ordinary and hidden QR checks',a
  $('hidden').value='SECRET';
  $('public').value='https://example.com';
  $('key').value='demo-key';
+});
+test('auto size picks a compact version and still restores the whole message',async()=>{
+ $('qrVersion').value='auto';$('qrVersion').dispatchEvent(new dom.window.Event('change'));
+ $('compression').value='auto';
+ $('public').value='https://masato-lab.pages.dev/';
+ $('hidden').value='合歓の木の 在りて終日 三途にて';
+ $('key').value='auto-size-key';
+ await $('maker').onsubmit(submit);
+ assert.equal($('output').hidden,false,$('makeStatus').textContent);
+ assert.match($('makeStatus').textContent,/自動サイズ・Version 12/);
+ assert.equal($('qr').width,(65+12)*14);
+ assert.equal(document.querySelectorAll('#checks .success').length,3);
+ $('qrVersion').value='12';$('qrVersion').dispatchEvent(new dom.window.Event('change'));
+ $('compression').value='off';$('hidden').value='SECRET';$('public').value='https://example.com';
+});
+test('auto size expands to fit 1679 bytes instead of rejecting at 255',async()=>{
+ $('qrVersion').value='auto';$('qrVersion').dispatchEvent(new dom.window.Event('change'));
+ $('compression').value='off';
+ $('public').value='https://masato-lab.pages.dev/';
+ $('hidden').value='ABCD'.repeat(419)+'XYZ';
+ $('key').value='auto-expand-key';
+ await $('maker').onsubmit(submit);
+ assert.equal($('output').hidden,false,$('makeStatus').textContent);
+ assert.match($('makeStatus').textContent,/自動サイズ・Version (3[0-6])/);
+ assert.equal(document.querySelectorAll('#checks .success').length,3);
+ $('qrVersion').value='12';$('qrVersion').dispatchEvent(new dom.window.Event('change'));
+ $('compression').value='off';$('hidden').value='SECRET';$('public').value='https://example.com';
 });
 test('upload previous PNG, restore SECRET and reject wrong key',async()=>{
  const p=PNG.sync.read(fs.readFileSync('tests/legacy-0.png'));globalThis.createImageBitmap=async()=>new ImageData(new Uint8ClampedArray(p.data),p.width,p.height);
