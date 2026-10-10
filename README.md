@@ -2,7 +2,7 @@
 
 ひとつのQRに、表と裏のメッセージ。
 
-## ▶ [アプリを開く](https://double-qr-pwa.sunny-seed-0354.chatgpt.site)
+## ▶ [アプリを開く](https://masato-nasu.github.io/DOUBLE-QR/)
 
 インストール不要。リンクを開くとブラウザで使えます。ホーム画面への追加にも対応しています。
 
