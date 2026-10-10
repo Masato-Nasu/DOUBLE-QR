@@ -1,0 +1,43 @@
+import jsQR from 'jsqr';
+import {readBarcodes,prepareZXingModule,ZXING_WASM_VERSION} from 'zxing-wasm/reader';
+import {readGrid,N} from './core.js';
+export const DECODERS={zxing:'ZXing WASM '+ZXING_WASM_VERSION,jsqr:'jsQR 1.4.0'};
+export function configureReader(overrides){prepareZXingModule({overrides});}
+export function decodeJS(image){
+ const r=jsQR(image.data,image.width,image.height,{inversionAttempts:'attemptBoth'});
+ if(!r)return null;const p=r.location;return {public:r.data,corners:[p.topLeftCorner,p.topRightCorner,p.bottomRightCorner,p.bottomLeftCorner],decoder:'jsQR'};
+}
+export async function decodeZX(image){
+ const r=(await readBarcodes(image,{formats:['QRCode'],tryHarder:true,maxNumberOfSymbols:1}))[0];
+ if(!r||r.error)return null;const p=r.position;return {public:r.text,corners:[p.topLeft,p.topRight,p.bottomRight,p.bottomLeft],decoder:'ZXing'};
+}
+export async function decodeBoth(image){
+ const errors={};let zxing=null,jsqr=null;
+ try{zxing=await decodeZX(image);}catch(e){errors.zxing=e.message;}
+ try{jsqr=decodeJS(image);}catch(e){errors.jsqr=e.message;}
+ return {zxing,jsqr,errors};
+}
+export function project(corners,u,v){
+ const [p0,p1,p2,p3]=corners,dx1=p1.x-p2.x,dx2=p3.x-p2.x,dx3=p0.x-p1.x+p2.x-p3.x,dy1=p1.y-p2.y,dy2=p3.y-p2.y,dy3=p0.y-p1.y+p2.y-p3.y;
+ const den=dx1*dy2-dx2*dy1;if(Math.abs(den)<1e-9)throw Error('QRの位置を確認できません。');
+ const g=(dx3*dy2-dx2*dy3)/den,h=(dx1*dy3-dx3*dy1)/den;
+ return {x:((p1.x-p0.x+g*p1.x)*u+(p3.x-p0.x+h*p3.x)*v+p0.x)/(g*u+h*v+1),y:((p1.y-p0.y+g*p1.y)*u+(p3.y-p0.y+h*p3.y)*v+p0.y)/(g*u+h*v+1)};
+}
+function grayImage(image){const gray=new Uint8Array(image.width*image.height),hist=new Uint32Array(256);let sum=0;for(let i=0;i<gray.length;i++){gray[i]=Math.round(image.data[i*4]*.299+image.data[i*4+1]*.587+image.data[i*4+2]*.114);hist[gray[i]]++;sum+=gray[i];}let weight=0,sumB=0,max=-1,threshold=128;for(let t=0;t<256;t++){weight+=hist[t];if(!weight)continue;const wF=gray.length-weight;if(!wF)break;sumB+=t*hist[t];const between=weight*wF*(sumB/weight-(sum-sumB)/wF)**2;if(between>max){max=between;threshold=t;}}return {gray,threshold};}
+export function sampleGrid(image,corners,thresholdOverride){
+ const {gray,threshold}=grayImage(image),cut=thresholdOverride??threshold,{width,height}=image,grid=new Uint8Array(N*N);
+ const value=(x,y)=>{x=Math.max(0,Math.min(width-1,x));y=Math.max(0,Math.min(height-1,y));const a=Math.floor(x),b=Math.floor(y),dx=x-a,dy=y-b;const p=(ix,iy)=>gray[Math.min(height-1,iy)*width+Math.min(width-1,ix)];return p(a,b)*(1-dx)*(1-dy)+p(a+1,b)*dx*(1-dy)+p(a,b+1)*(1-dx)*dy+p(a+1,b+1)*dx*dy;};
+ for(let r=0;r<N;r++)for(let c=0;c<N;c++){const patches=[];for(const dy of [-.1,0,.1])for(const dx of [-.1,0,.1]){const p=project(corners,(c+.5+dx)/N,(r+.5+dy)/N);patches.push(value(p.x,p.y));}patches.sort((a,b)=>a-b);grid[r*N+c]=+(patches[4]<=cut);}
+ return grid;
+}
+export async function recover(image,key,repetitions='auto',decoded){
+ if(!key)throw Error('生成時の鍵を入力してください。');
+ const codes=decoded||await decodeBoth(image),candidates=[codes.zxing,codes.jsqr].filter(Boolean);
+ if(!candidates.length)throw Error('表のQRを読み取れません。QR全体を大きく、正面から撮影してください。');
+ for(const code of candidates)for(const threshold of [undefined,128]){
+  const grid=sampleGrid(image,code.corners,threshold);
+  for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])try{return await readGrid(code.public,grid,key,rep);}catch{}
+ }
+ throw Error('表は読めましたが、裏を復元できません。鍵を確認し、画像を大きくするか正面から撮り直してください。');
+}
+export async function verify(image,publicText,hidden,key,rep){const codes=await decodeBoth(image);let recovered=false;try{const r=await recover(image,key,rep,codes);recovered=r.public===publicText&&r.hidden===hidden;}catch{}return {zxing:codes.zxing?.public===publicText,jsqr:codes.jsqr?.public===publicText,hidden:recovered,errors:codes.errors};}

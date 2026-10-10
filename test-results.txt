@@ -1,0 +1,48 @@
+
+> test
+> node --test tests/*.test.mjs
+
+✔ Python v0.4 pixel / positions / payload compatibility 0 (69.801375ms)
+✔ Read previous Python PNG 0 (303.030611ms)
+✔ Python v0.4 pixel / positions / payload compatibility 1 (53.177976ms)
+✔ Read previous Python PNG 1 (230.735529ms)
+✔ Python v0.4 pixel / positions / payload compatibility 2 (56.695118ms)
+✔ Read previous Python PNG 2 (241.952575ms)
+✔ Python v0.4 pixel / positions / payload compatibility 3 (42.981474ms)
+✔ Read previous Python PNG 3 (192.405512ms)
+✔ Python v0.4 pixel / positions / payload compatibility 4 (80.604631ms)
+✔ Read previous Python PNG 4 (239.671703ms)
+✔ Python v0.4 pixel / positions / payload compatibility 5 (45.674443ms)
+✔ Read previous Python PNG 5 (206.913601ms)
+✔ Python v0.4 pixel / positions / payload compatibility 6 (49.980316ms)
+✔ Read previous Python PNG 6 (169.272046ms)
+✔ Python v0.4 pixel / positions / payload compatibility 7 (35.446655ms)
+✔ Read previous Python PNG 7 (169.531841ms)
+✔ Python v0.4 pixel / positions / payload compatibility 8 (34.461062ms)
+✔ Read previous Python PNG 8 (185.465852ms)
+✔ Python v0.4 pixel / positions / payload compatibility 9 (31.891947ms)
+✔ Read previous Python PNG 9 (168.417782ms)
+✔ Python v0.4 pixel / positions / payload compatibility 10 (42.695389ms)
+✔ Read previous Python PNG 10 (235.252611ms)
+✔ Python v0.4 pixel / positions / payload compatibility 11 (34.923469ms)
+✔ Read previous Python PNG 11 (326.22978ms)
+✔ wrong key and modified payload rejected (119.328959ms)
+✔ majority decoding corrects damaged first header and body (80.982352ms)
+✔ input bounds and budget guard data (29.138158ms)
+✔ small capacity scan decodes actual synthetic images and separates outcomes (1114.027738ms)
+✔ held-out statistical evaluation and cancellation (345.363612ms)
+✔ manifest and all referenced files valid (1.411106ms)
+✔ offline cache installs and serves app, decoder and icons at root and nested path (23.7892ms)
+✔ updates wait for user action and only remove own cache (5.514879ms)
+✔ simple tabs transfer key and preserve fields (3.224278ms)
+✔ generate verified PNG, invalidate on input, block oversized payload (613.075713ms)
+✔ upload previous PNG, restore SECRET and reject wrong key (578.6436ms)
+✔ manual evidence is separate and stores neither keys nor messages (5.029578ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3611.128218

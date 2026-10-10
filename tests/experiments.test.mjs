@@ -1,0 +1,7 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+import {capacity,statistics} from '../src/experiments.js';import {configureReader} from '../src/reader.js';
+globalThis.ImageData=class{constructor(data,width,height){this.data=data;this.width=width;this.height=height;}};
+configureReader({wasmBinary:fs.readFileSync('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm')});
+const input={publicText:'https://example.com',hidden:'SECRET',key:'demo-key',rep:1,seed:20261010};
+test('small capacity scan decodes actual synthetic images and separates outcomes',async()=>{const r=await capacity({...input,maxBytes:2,samples:1},()=>{});assert.equal(r.rows.length,2);for(const row of r.rows){assert.equal(row.tested,true);assert.equal(row.tests.length,3);assert.equal(row.tests[0].hidden,true);assert.equal(row.strict_all,row.zxing_all&&row.jsqr_all&&row.hidden_all);}assert.equal(r.full_scan,false);assert.equal(r.max_clean_bytes,2);});
+test('held-out statistical evaluation and cancellation',async()=>{const r=await statistics({...input,count:8},()=>{});assert.equal(r.rows.length,16);assert.equal(r.true_positive.trials,8);assert.equal(r.known_encoder_false_positive.success,0);assert.equal(r.known_encoder_true_positive.success,8);assert.ok(r.auc>=0&&r.auc<=1);const c=new AbortController();c.abort();await assert.rejects(()=>capacity({...input,maxBytes:2},()=>{},c.signal),/中止/);});
