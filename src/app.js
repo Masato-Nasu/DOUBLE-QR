@@ -22,9 +22,9 @@ document.querySelectorAll('[data-password]').forEach(button=>button.onclick=()=>
 function updateCapacity(){
  const bytes=utf8($('hidden').value).length,mode=$('qrVersion').value,autoSize=mode==='auto';
  const max=autoSize||mode==='36'?padCapacity($('public').value,36):mode==='20'?maxLargeBytes(1):maxPackedBytes(1);
- $('byteCount').textContent=`${bytes} / ${max} bytes`;
- const best=autoSize||mode==='36'?1:[5,3,1].find(rep=>bytes<=(mode==='20'?maxLargeBytes(rep):maxPackedBytes(rep)));
  const experimenting=$('compression').value==='auto';
+ $('byteCount').textContent=experimenting?`原文 ${bytes} bytes`:`${bytes} / ${max} bytes`;
+ const best=autoSize||mode==='36'?1:[5,3,1].find(rep=>bytes<=(mode==='20'?maxLargeBytes(rep):maxPackedBytes(rep)));
  $('rep').disabled=autoSize||mode==='36';
  $('repHint').textContent=autoSize
   ?'自動サイズでは必要な容量に応じてVersion 12〜36を選びます。余白を利用する実験方式のため埋め込み強度は固定です。'
@@ -92,7 +92,14 @@ $('maker').onsubmit=async event=>{event.preventDefault();if(!globalThis.crypto?.
  if(!result.accepted)throw Error('読み取り検査に合格するQRを作成できませんでした。読めないQRは表示しません。文章を短くして再試行してください。');
  current=result;renderChecks();await showView('double');
  status('makeStatus',`作成しました。表・裏の自動検査を通過しました（${data.qrVersion==='auto'?`自動サイズ・Version ${current.qrVersion}`:data.qrVersion===36?'余白実験・Version 36':`${current.repetitions}重${data.auto?'・自動選択':''}`}）${current.compressed?`。圧縮: ${bytes} → ${stored}バイト`:''}。${data.qrVersion==='auto'?'QRサイズは自動決定しました。実機読み取りは端末により異なります。':data.qrVersion===36?'余白方式は実機の成功例がありますが、すべての環境では未確認です。':data.qrVersion===20?'大きいQRは実験機能であり、実機読み取りはまだ未確認です。':''}画面を読み取る場合は「全画面でQRを表示」を押してください。`);}catch(e){if(id===generation){current=null;status('makeStatus',e.message,true);}}finally{if(id===generation)setGenerationBusy(false);}};
-$('plain').onclick=async()=>{++generation;setGenerationBusy(true);$('output').hidden=true;status('makeStatus','通常QRを作成しています…');try{const q=$('qrVersion').value==='auto'?plainPad($('public').value,0,paddingVersionsFor($('public').value,utf8($('hidden').value).length)[0]??PAD_VERSION):$('qrVersion').value==='36'?plainPad($('public').value):$('qrVersion').value==='20'?plainLarge($('public').value):plainQR($('public').value);current={plain:q.matrix,matrix:q.matrix,plainOnly:true,accepted:true};$('checks').replaceChildren();$('blockTable').replaceChildren();$('budgetInfo').textContent='裏メッセージは含まれていません。';await showView('plain');status('makeStatus','通常QRを作成しました。');}catch(e){status('makeStatus',e.message,true);}finally{setGenerationBusy(false);}};
+$('plain').onclick=async()=>{++generation;setGenerationBusy(true);$('output').hidden=true;status('makeStatus','通常QRを作成しています…');try{const mode=$('qrVersion').value;
+ let q;
+ if(current&&!current.plainOnly){q={matrix:current.plain};}
+ else if(mode==='auto'){
+  const prepared=$('compression').value==='auto'?await prepareHidden($('hidden').value,true):null;
+  const size=prepared?.storedBytes??utf8($('hidden').value).length;
+  q=plainPad($('public').value,0,paddingVersionsFor($('public').value,size)[0]??PAD_VERSION);
+ }else q=mode==='36'?plainPad($('public').value):mode==='20'?plainLarge($('public').value):plainQR($('public').value);current={plain:q.matrix,matrix:q.matrix,plainOnly:true,accepted:true};$('checks').replaceChildren();$('blockTable').replaceChildren();$('budgetInfo').textContent='裏メッセージは含まれていません。';await showView('plain');status('makeStatus','通常QRを作成しました。');}catch(e){status('makeStatus',e.message,true);}finally{setGenerationBusy(false);}};
 $('share').onclick=async()=>{if(!pngBlob)return;const file=new File([pngBlob],$('save').download,{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'DOUBLE QR'});else{download(pngBlob,$('save').download);status('makeStatus','画像を保存しました。画像ファイルを共有してください。');}}catch(e){if(e.name!=='AbortError')status('makeStatus','共有できませんでした。「保存」をお使いください。',true);}};
 $('enlarge').onclick=()=>{if(!current?.accepted||!pngURL||currentView==='diff')return;$('zoom').classList.toggle('large-qr',current.qrVersion>=30);$('zoomImage').src=pngURL;$('zoom').showModal();};$('closeZoom').onclick=()=>$('zoom').close();
 async function loadFile(file){if(file.size>24*1024*1024)throw Error('画像は24MB以下にしてください。');let bitmap;try{bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});}catch{const url=URL.createObjectURL(file);try{bitmap=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=url;});}catch{throw Error('この画像を開けません。JPEGまたはPNGを選んでください。');}finally{URL.revokeObjectURL(url);}}const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();return ctx.getImageData(0,0,canvas.width,canvas.height);}
