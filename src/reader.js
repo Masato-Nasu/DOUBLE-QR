@@ -31,6 +31,39 @@ export function sampleGrid(image,corners,thresholdOverride){
  for(let r=0;r<N;r++)for(let c=0;c<N;c++){const patches=[];for(const dy of [-.1,0,.1])for(const dx of [-.1,0,.1]){const p=project(corners,(c+.5+dx)/N,(r+.5+dy)/N);patches.push(value(p.x,p.y));}patches.sort((a,b)=>a-b);grid[r*N+c]=+(patches[4]<=cut);}
  return grid;
 }
+// Camera images often contain module-level errors even when the normal QR
+// decoder repairs the public payload. Combine several independently sampled
+// camera frames before authenticating the hidden payload. The stream is kept
+// only in memory and is reset whenever the detected public QR changes.
+export function createCameraAccumulator(){
+ let publicText='',count=0,totals=[new Int16Array(N*N),new Int16Array(N*N)];
+ const reset=()=>{publicText='';count=0;totals=[new Int16Array(N*N),new Int16Array(N*N)];};
+ const majority=(votes)=>Uint8Array.from(votes,v=>v>0?1:0);
+ const add=(image,code)=>{
+  if(!code?.public||!code.corners)throw Error('表のQR位置を取得できません。');
+  if(publicText!==code.public){reset();publicText=code.public;}
+  // Age history so movement and changed focus do not permanently poison votes.
+  if(count>=24){for(const t of totals)for(let i=0;i<t.length;i++)t[i]=Math.trunc(t[i]/2);count=12;}
+  for(const [j,threshold] of [undefined,128].entries()){
+   const grid=sampleGrid(image,code.corners,threshold);
+   for(let i=0;i<grid.length;i++)totals[j][i]+=grid[i]?1:-1;
+  }
+  count++;
+  return count;
+ };
+ const recover=async(key,repetitions='auto')=>{
+  if(!publicText||count<2)throw Error('画像の蓄積が必要です。');
+  const reps=repetitions==='auto'?[1,3,5]:[Number(repetitions)];
+  for(const totalsOne of totals){
+   const grid=majority(totalsOne);
+   for(const rep of reps)for(const decode of [readGridPacked,readGrid]){
+    try{return await decode(publicText,grid,key,rep);}catch{}
+   }
+  }
+  throw Error('裏を復元できませんでした。');
+ };
+ return{add,recover,reset,get count(){return count;},get publicText(){return publicText;}};
+}
 export async function recover(image,key,repetitions='auto',decoded){
  if(!key)throw Error('生成時の鍵を入力してください。');
  const codes=decoded||await decodeBoth(image),candidates=[codes.zxing,codes.jsqr].filter(Boolean);
