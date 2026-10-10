@@ -49,6 +49,9 @@ export function createCameraAccumulator(){
   if(count>=24){for(const sets of totals.values())for(const t of sets)for(let i=0;i<t.length;i++)t[i]=Math.trunc(t[i]/2);count=12;}
   const prepared=grayImage(image);
   for(const [n,sets] of totals)for(const [j,threshold] of [undefined,128].entries()){
+   // Preserve the responsiveness of the successful V12/V20 modes.
+   // The much denser V36 accumulation starts only if earlier frames did not read.
+   if(n===PAD_N&&count<2)continue;
    const grid=sampleGrid(image,code.corners,threshold,n,prepared);
    for(let i=0;i<grid.length;i++)sets[j][i]+=grid[i]?1:-1;
   }
