@@ -40,7 +40,7 @@ export async function buildPacked(publicText,hidden,key,rep=1,prepared=null){
  if(!usage.budget_ok)throw Error('誤り訂正の余裕が不足しました。裏を短くしてください。');
  return {plain,matrix,budget:usage,publicText,hiddenBytes:count,storedBytes:body.length,compressed:!!prepared?.compressed,repetitions:rep,layout:'packed'};
 }
-async function decodePacket(publicText,raw,key){
+export async function decodePacket(publicText,raw,key){
  const len=raw[0];
  if(len<1||len>255||raw.length!==len+9)throw Error('長さが不正です。');
  const encrypted=raw.slice(1,len+1),tag=raw.slice(len+1);
