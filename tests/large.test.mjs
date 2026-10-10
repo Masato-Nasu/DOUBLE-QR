@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import {LARGE_N,LARGE_VERSION,plainLarge,buildLarge,readGridLarge,maxLargeBytes} from '../src/large.js';
 import {maxPackedBytes} from '../src/packed.js';
 import {pixels} from '../src/core.js';
-import {decodeBoth,recover,configureReader} from '../src/reader.js';
+import {decodeBoth,recover,configureReader,createCameraAccumulator} from '../src/reader.js';
 import {prepareHidden} from '../src/compression.js';
 globalThis.ImageData=class{constructor(data,width,height){this.data=data;this.width=width;this.height=height;}};
 configureReader({wasmBinary:fs.readFileSync('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm')});
@@ -38,4 +38,23 @@ test('large QR also supports opt-in compressed text and wrong key rejection',asy
  const q=await buildLarge(front,hidden,'large-secret',1,p);
  assert.equal((await readGridLarge(front,q.matrix,'large-secret',1)).hidden,hidden);
  await assert.rejects(()=>readGridLarge(front,q.matrix,'wrong-key',1));
+});
+
+test('multi-frame camera recovery supports large QR after independent image errors',async()=>{
+ const front='https://example.com',hidden='ABCDE'.repeat(40),key='screen-large';
+ const q=await buildLarge(front,hidden,key,1),raw=pixels(q.matrix,8);
+ const im=new ImageData(raw.data,raw.width,raw.height);
+ const detected=await decodeBoth(im),code=detected.zxing||detected.jsqr;
+ assert(code?.corners,'standard reader must locate ordinary QR');
+ const history=createCameraAccumulator();
+ let seed=20261010;
+ const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ for(let k=0;k<9;k++){
+  const damaged=q.matrix.slice();
+  for(let i=0;i<damaged.length;i++)if(rand()<.02)damaged[i]^=1;
+  const x=pixels(damaged,8);
+  history.add(new ImageData(x.data,x.width,x.height),code);
+ }
+ assert.equal((await history.recover(key,1)).hidden,hidden);
+ history.reset();assert.equal(history.count,0);
 });
