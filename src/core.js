@@ -94,5 +94,5 @@ export async function readGrid(publicText,grid,key,rep=1){
  }
  throw Error('裏を復元できませんでした。鍵・強度・画像の鮮明さを確認してください。');
 }
-export function pixels(matrix,scale=14,border=6){const size=(N+border*2)*scale,data=new Uint8ClampedArray(size*size*4);data.fill(255);for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(matrix[r*N+c])for(let y=(r+border)*scale;y<(r+border+1)*scale;y++)for(let x=(c+border)*scale;x<(c+border+1)*scale;x++){const i=(y*size+x)*4;data[i]=data[i+1]=data[i+2]=0;}return {width:size,height:size,data};}
+export function pixels(matrix,scale=14,border=6){const n=Math.sqrt(matrix.length);if(!Number.isInteger(n))throw Error('不正なQR行列サイズです。');const size=(n+border*2)*scale,data=new Uint8ClampedArray(size*size*4);data.fill(255);for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(matrix[r*n+c])for(let y=(r+border)*scale;y<(r+border+1)*scale;y++)for(let x=(c+border)*scale;x<(c+border+1)*scale;x++){const i=(y*size+x)*4;data[i]=data[i+1]=data[i+2]=0;}return {width:size,height:size,data};}
 export function features(a){let black=0,h=0,v=0,u=0;for(let r=0;r<N;r++)for(let c=0;c<N;c++){const x=a[r*N+c];black+=x;if(c<N-1)h+=+(x!==a[r*N+c+1]);if(r<N-1)v+=+(x!==a[(r+1)*N+c]);if(r<N-1&&c<N-1)u+=+(x===a[r*N+c+1]&&x===a[(r+1)*N+c]&&x===a[(r+1)*N+c+1]);}return [black/(N*N),h/(N*(N-1)),v/(N*(N-1)),u/((N-1)**2)];}
