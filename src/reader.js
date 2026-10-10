@@ -75,9 +75,12 @@ export function createCameraAccumulator(){
   if(publicText!==code.public){reset();publicText=code.public;}
   if(count>=24){for(const sets of totals.values())for(const t of sets)for(let i=0;i<t.length;i++)t[i]=Math.trunc(t[i]/2);count=12;}
   const prepared=grayImage(image);
+  if(count>=1)for(const version of detectPaddingVersions(image,code.corners,prepared)){
+   const n=4*version+17;
+   if(!totals.has(n))totals.set(n,[new Int16Array(n*n),new Int16Array(n*n)]);
+  }
   for(const [n,sets] of totals)for(const [j,threshold] of [undefined,128].entries()){
-   // Preserve the responsiveness of the successful V12/V20 modes.
-   // The much denser V36 accumulation starts only if earlier frames did not read.
+   // Keep existing V12/V20 and the successfully field-tested V36 as fallbacks.
    if(n===PAD_N&&count<2)continue;
    const grid=sampleGrid(image,code.corners,threshold,n,prepared);
    for(let i=0;i<grid.length;i++)sets[j][i]+=grid[i]?1:-1;
@@ -98,7 +101,7 @@ export function createCameraAccumulator(){
    const grid=majority(votes);
    for(const rep of reps)try{return await readGridLarge(publicText,grid,key,rep);}catch{}
   }
-  for(const votes of totals.get(PAD_N)){
+  for(const [n,sets] of totals)for(const votes of sets){
    try{return await readPadding(publicText,majority(votes),key);}catch{}
   }
   throw Error('裏を復元できませんでした。');
@@ -115,22 +118,29 @@ export async function recover(image,key,repetitions='auto',decoded){
   for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])for(const decode of [readGridPacked,readGrid])try{return await decode(code.public,grid,key,rep);}catch{}
   const largeGrid=sampleGrid(image,code.corners,threshold,LARGE_N,prepared);
   for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])try{return await readGridLarge(code.public,largeGrid,key,rep);}catch{}
-  const padGrid=sampleGrid(image,code.corners,threshold,PAD_N,prepared);
-  try{return await readPadding(code.public,padGrid,key);}catch{}
+  const versions=[...new Set([...detectPaddingVersions(image,code.corners,prepared),36])];
+  for(const version of versions){
+   const n=version*4+17;
+   const padGrid=n===N?grid:n===LARGE_N?largeGrid:sampleGrid(image,code.corners,threshold,n,prepared);
+   try{return await readPadding(code.public,padGrid,key);}catch{}
+  }
  }
  throw Error('表は読めましたが、裏を復元できません。鍵を確認し、画像を大きくするか正面から撮り直してください。');
 }
 export async function verify(image,publicText,hidden,key,rep,expectedVersion=null){
  const codes=await decodeBoth(image);
  let recovered=false;
- if(expectedVersion===36){
+ if(Number.isInteger(expectedVersion)&&expectedVersion>=12&&expectedVersion<=36){
   const prepared=grayImage(image);
   for(const code of [codes.zxing,codes.jsqr].filter(Boolean)){
+   const versions=[...new Set([...detectPaddingVersions(image,code.corners,prepared),expectedVersion])];
    for(const threshold of [undefined,128]){
-    try{
-     const r=await readPadding(code.public,sampleGrid(image,code.corners,threshold,PAD_N,prepared),key);
+    for(const version of versions)try{
+     const n=4*version+17;
+     const r=await readPadding(code.public,sampleGrid(image,code.corners,threshold,n,prepared),key);
      if(r.public===publicText&&r.hidden===hidden){recovered=true;break;}
     }catch{}
+    if(recovered)break;
    }
    if(recovered)break;
   }
