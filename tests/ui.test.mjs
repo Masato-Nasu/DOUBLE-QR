@@ -56,6 +56,32 @@ test('invalid strength never leaves a QR shown for scanning',async()=>{
  assert.match($('makeStatus').textContent,/自動/);
  $('rep').value='auto';
 });
+test('experimental larger QR keeps ordinary version 12 as default',async()=>{
+ assert.equal($('qrVersion').value,'12');
+ $('qrVersion').value='20';
+ $('public').value='https://example.com';
+ $('hidden').value='ABCDE'.repeat(40); // 200 bytes uncompressed
+ $('hidden').dispatchEvent(new dom.window.Event('input',{bubbles:true}));
+ assert.match($('byteCount').textContent,/200/);
+ $('compression').value='off';
+ await $('maker').onsubmit(submit);
+ assert.equal($('output').hidden,false);
+ assert.match($('makeStatus').textContent,/実験機能/);
+ assert.equal($('qr').width,(97+12)*14);
+ assert.equal(document.querySelectorAll('#checks .success').length,3);
+ $('qrVersion').value='12';$('hidden').value='SECRET';
+});
+test('opt-in compression reports stored size and successfully decodes long Japanese',async()=>{
+ $('qrVersion').value='12';
+ $('compression').value='auto';
+ $('public').value='https://example.com';
+ $('hidden').value='秘密'.repeat(2500);
+ await $('maker').onsubmit(submit);
+ assert.equal($('output').hidden,false);
+ assert.match($('makeStatus').textContent,/圧縮: 15000 →/);
+ assert.equal(document.querySelectorAll('#checks .success').length,3);
+ $('compression').value='off';$('hidden').value='SECRET';
+});
 test('upload previous PNG, restore SECRET and reject wrong key',async()=>{
  const p=PNG.sync.read(fs.readFileSync('tests/legacy-0.png'));globalThis.createImageBitmap=async()=>new ImageData(new Uint8ClampedArray(p.data),p.width,p.height);
  Object.defineProperty($('file'),'files',{value:[{size:1000}]});$('readKey').value='demo-key';await $('file').onchange();assert.equal($('publicResult').textContent,'https://example.com');assert.equal($('secretResult').textContent,'SECRET');assert.equal($('secretMessage').hidden,false);
