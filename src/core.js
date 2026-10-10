@@ -57,7 +57,7 @@ export function budget(plain,modified){
  const blocks=BLOCKS.map((b,i)=>({block:i+1,changed_codewords:affected[i].size,correction_limit:b.limit,remaining:b.limit-affected[i].size}));
  return {changed_modules:changed,changed_percent:changed/(N*N)*100,min_remaining:Math.min(...blocks.map(x=>x.remaining)),budget_ok:blocks.every(x=>x.remaining>=2),blocks};
 }
-async function keys(publicText,key,n){
+export async function keys(publicText,key,n){
  const material=await crypto.subtle.importKey('raw',utf8(key),'PBKDF2',false,['deriveBits']);
  const raw=await crypto.subtle.deriveBits({name:'PBKDF2',salt:utf8('DQR-v1'+publicText),iterations:100000,hash:'SHA-256'},material,256);
  const mac=await crypto.subtle.importKey('raw',raw,{name:'HMAC',hash:'SHA-256'},false,['sign']);
