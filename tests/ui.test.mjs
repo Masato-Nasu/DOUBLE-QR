@@ -151,3 +151,61 @@ test('upload previous PNG, restore SECRET and reject wrong key',async()=>{
 test('manual evidence is separate and stores neither keys nor messages',()=>{
  $('phoneSet').value='test';$('phoneDevice').value='unit fixture';$('phoneConditions').value='simulated DOM';$('phoneForm').onsubmit(submit);const rows=JSON.parse(localStorage.getItem('double-qr-pwa-device-trials'));assert.equal(rows.length,1);assert.equal(rows[0].evidence,'user_reported_device_test');assert.equal(rows[0].bytes,0);assert.equal(rows[0].rep,0);assert.equal('key'in rows[0],false);assert.equal('hidden'in rows[0],false);$('phoneUndo').click();assert.deepEqual(JSON.parse(localStorage.getItem('double-qr-pwa-device-trials')),[]);
 });
+
+test('Share opens native sheet or explicit copy help and never triggers an automatic download',async()=>{
+ $('qrVersion').value='12';
+ $('compression').value='off';
+ $('public').value='https://example.com';
+ $('hidden').value='SECRET';
+ $('key').value='share-test-key';
+ await $('maker').onsubmit(submit);
+ assert.equal($('save').hidden,false);
+ const dialog=$('shareHelp');
+ dialog.showModal=()=>{dialog.open=true;};
+ dialog.close=()=>{dialog.open=false;};
+ const oldCreate=document.createElement.bind(document);
+ const originalClipboardItem=globalThis.ClipboardItem;
+ let attempts=0,copyCount=0,nativeCalls=0;
+ document.createElement=(tag,...args)=>{
+  const el=oldCreate(tag,...args);
+  if(tag.toLowerCase()==='a'){attempts++;el.click=()=>{throw Error('Silent file download is not allowed from Share');};}
+  return el;
+ };
+ try{
+  Object.defineProperty(navigator,'share',{configurable:true,value:undefined});
+  Object.defineProperty(navigator,'canShare',{configurable:true,value:undefined});
+  await $('share').onclick();
+  assert.equal(dialog.open,true);
+  assert.equal(attempts,0);
+  assert.match($('shareHelpText').textContent,/直接共有/);
+  assert.equal($('copyQR').hidden,true);
+  $('closeShareHelp').click();
+  assert.equal(dialog.open,false);
+  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async items=>{
+   copyCount++;assert.equal(items.length,1);assert(items[0].sources['image/png'] instanceof Blob);
+  }}});
+  globalThis.ClipboardItem=class{constructor(sources){this.sources=sources;}};
+  await $('share').onclick();
+  assert.equal($('copyQR').hidden,false);
+  await $('copyQR').onclick();
+  assert.equal(copyCount,1);
+  assert.match($('shareHelpText').textContent,/コピーしました/);
+  $('closeShareHelp').click();
+  globalThis.File=dom.window.File;
+  Object.defineProperty(navigator,'canShare',{configurable:true,value:({files})=>files.length===1});
+  Object.defineProperty(navigator,'share',{configurable:true,value:async ({files})=>{
+   nativeCalls++;assert.equal(files[0].type,'image/png');
+  }});
+  await $('share').onclick();
+  assert.equal(nativeCalls,1);
+  assert.equal(dialog.open,false);
+  assert.equal(attempts,0);
+  $('hidden').value='SECRET';$('key').value='demo-key';
+ }finally{
+  document.createElement=oldCreate;
+  Object.defineProperty(navigator,'share',{configurable:true,value:undefined});
+  Object.defineProperty(navigator,'canShare',{configurable:true,value:undefined});
+  Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined});
+  globalThis.ClipboardItem=originalClipboardItem;
+ }
+});
