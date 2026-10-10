@@ -17,6 +17,8 @@
 
 詳細：[設計原則と容量の物理的限界](./DESIGN-PRINCIPLES.md)
 
+[容量実験と実機検証条件の記録](./CAPACITY-RESEARCH.md)
+
 ## スクリーンショット
 
 <img src="docs/screenshots/generate.png" alt="DOUBLE QRの生成画面。表のURLと裏メッセージを入力し、自動検査を通過した二重QRを表示。" width="360">
