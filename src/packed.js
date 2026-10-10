@@ -1,8 +1,8 @@
 // v0.5: 1 byte of payload per Reed-Solomon codeword.
 // Changes are spread across RS blocks. The legacy bit-scattered codec remains
 // available through core.readGrid so existing DOUBLE QR images still open.
-import {plainQR,positions,WORD_MAP,BLOCKS,packet,budget,utf8,concat,keys} from './core.js';
-const decoder=new TextDecoder('utf-8',{fatal:true});
+import {plainQR,positions,WORD_MAP,BLOCKS,packetBytes,budget,utf8,concat,keys} from './core.js';
+import {unpackHidden} from './compression.js';
 const MAX_CHANGED_PER_BLOCK=BLOCKS.map(b=>Math.max(0,b.limit-2));
 const SAFE_WORDS=MAX_CHANGED_PER_BLOCK.reduce((a,b)=>a+b,0);
 export function maxPackedBytes(rep=1){
@@ -26,19 +26,19 @@ export async function packedPositions(publicText,key){
  }
  return result;
 }
-export async function buildPacked(publicText,hidden,key,rep=1){
+export async function buildPacked(publicText,hidden,key,rep=1,prepared=null){
  if(!key)throw Error('鍵を入力してください。');
  if(key.length>1024)throw Error('鍵が長すぎます。');
- const count=utf8(hidden).length,maximum=maxPackedBytes(rep);
- if(count>maximum)throw Error(`この強度の裏は最大${maximum}バイトです（現在${count}バイト）。短くするか自動を選択してください。`);
+ const body=prepared?.body??utf8(hidden),count=utf8(hidden).length,maximum=maxPackedBytes(rep);
+ if(body.length>maximum)throw Error(`この強度の裏は最大${maximum}バイトです（保存するデータ${body.length}バイト）。短くするか自動を選択してください。`);
  const plain=plainQR(publicText).matrix;
- const raw=await packet(publicText,hidden,key),loc=await packedPositions(publicText,key),width=raw.length*8;
+ const raw=await packetBytes(publicText,body,key),loc=await packedPositions(publicText,key),width=raw.length*8;
  if(width*rep>loc.length)throw Error('QRの空き容量を超えています。');
  const matrix=plain.slice();
  for(let k=0;k<rep;k++)for(let i=0;i<width;i++)matrix[loc[k*width+i]]=(raw[i>>3]>>(7-i%8))&1;
  const usage=budget(plain,matrix);
  if(!usage.budget_ok)throw Error('誤り訂正の余裕が不足しました。裏を短くしてください。');
- return {plain,matrix,budget:usage,publicText,hiddenBytes:count,repetitions:rep,layout:'packed'};
+ return {plain,matrix,budget:usage,publicText,hiddenBytes:count,storedBytes:body.length,compressed:!!prepared?.compressed,repetitions:rep,layout:'packed'};
 }
 async function decodePacket(publicText,raw,key){
  const len=raw[0];
@@ -48,7 +48,7 @@ async function decodePacket(publicText,raw,key){
  const expected=new Uint8Array(await crypto.subtle.sign('HMAC',mac,concat(utf8('tag'),utf8(publicText),Uint8Array.of(len),encrypted)));
  let different=0;for(let i=0;i<8;i++)different|=tag[i]^expected[i];
  if(different)throw Error('鍵またはデータが一致しません。');
- return {public:publicText,hidden:decoder.decode(encrypted.map((x,i)=>x^stream[i]))};
+ return {public:publicText,hidden:await unpackHidden(encrypted.map((x,i)=>x^stream[i]))};
 }
 export async function readGridPacked(publicText,grid,key,rep=1){
  if(!key)throw Error('生成時の鍵を入力してください。');
