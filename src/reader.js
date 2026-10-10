@@ -4,7 +4,8 @@ import {readGrid,N} from './core.js';
 import {readGridPacked} from './packed.js';
 import {readGridLarge,LARGE_N} from './large.js';
 import {readPadding} from './pad-channel.js';
-import {PAD_N} from './pad-matrix.js';
+import {PAD_N,PAD_VERSIONS} from './pad-matrix.js';
+import QRVersion from 'qrcode/lib/core/version.js';
 export const DECODERS={zxing:'ZXing WASM '+ZXING_WASM_VERSION,jsqr:'jsQR 1.4.0'};
 export function configureReader(overrides){prepareZXingModule({overrides});}
 export function decodeJS(image){
@@ -33,6 +34,32 @@ export function sampleGrid(image,corners,thresholdOverride,n=N,prepared=null){
  const value=(x,y)=>{x=Math.max(0,Math.min(width-1,x));y=Math.max(0,Math.min(height-1,y));const a=Math.floor(x),b=Math.floor(y),dx=x-a,dy=y-b;const p=(ix,iy)=>gray[Math.min(height-1,iy)*width+Math.min(width-1,ix)];return p(a,b)*(1-dx)*(1-dy)+p(a+1,b)*dx*(1-dy)+p(a,b+1)*(1-dx)*dy+p(a+1,b+1)*dx*dy;};
  for(let r=0;r<n;r++)for(let c=0;c<n;c++){const patches=[];for(const dy of [-.1,0,.1])for(const dx of [-.1,0,.1]){const p=project(corners,(c+.5+dx)/n,(r+.5+dy)/n);patches.push(value(p.x,p.y));}patches.sort((a,b)=>a-b);grid[r*n+c]=+(patches[4]<=cut);}
  return grid;
+}
+// Read the two 18-bit Version Information blocks before sampling any
+// full-size padding grid. This keeps variable-size camera reading responsive.
+export function detectPaddingVersions(image,corners,prepared=null){
+ const {gray,threshold}=prepared??grayImage(image),{width,height}=image;
+ const sample=(r,c,n)=>{
+  const p=project(corners,(c+.5)/n,(r+.5)/n);
+  const x=Math.max(0,Math.min(width-1,Math.round(p.x)));
+  const y=Math.max(0,Math.min(height-1,Math.round(p.y)));
+  return +(gray[y*width+x]<=threshold);
+ };
+ const candidates=[];
+ for(const version of PAD_VERSIONS){
+  const n=version*4+17,bits=QRVersion.getEncodedBits(version);
+  let errors=0;
+  for(let i=0;i<18;i++){
+   const r=Math.floor(i/3),c=n-11+i%3,bit=(bits>>>i)&1;
+   errors+=+(sample(r,c,n)!==bit);
+   errors+=+(sample(c,r,n)!==bit);
+  }
+  candidates.push({version,errors});
+ }
+ candidates.sort((a,b)=>a.errors-b.errors);
+ // Valid samples should score ~0/36 in a clean QR. Up to 12 corrupted
+ // samples are tolerated; the HMAC will still authenticate the full payload.
+ return candidates.filter(x=>x.errors<=12).slice(0,2).map(x=>x.version);
 }
 // Camera images often contain module-level errors even when the normal QR
 // decoder repairs the public payload. Combine several independently sampled
