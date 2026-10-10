@@ -20,10 +20,21 @@ const submit={preventDefault(){}};
 test('simple tabs transfer key and preserve fields',()=>{
  $('key').value='demo-key';$('readTab').click();assert.equal($('readPanel').hidden,false);assert.equal($('makePanel').hidden,true);assert.equal($('readKey').value,'demo-key');$('makeTab').click();assert.equal($('makePanel').hidden,false);
 });
-test('generate verified PNG, invalidate on input, block oversized payload',async()=>{
+test('generate verified PNG, invalidate on input, show capacity and block oversized payload',async()=>{
  await $('maker').onsubmit(submit);assert.match($('makeStatus').textContent,/通過しました/);assert.equal($('output').hidden,false);assert.equal($('save').hidden,false);assert.equal(document.querySelectorAll('#checks .success').length,3);
- $('hidden').value='x'.repeat(100);$('hidden').dispatchEvent(new dom.window.Event('input',{bubbles:true}));assert.equal($('output').hidden,true);await $('maker').onsubmit(submit);assert.equal($('save').hidden,true);assert.match($('makeStatus').textContent,/通過しませんでした/);
+ $('hidden').value='x'.repeat(124);$('hidden').dispatchEvent(new dom.window.Event('input',{bubbles:true}));assert.equal($('output').hidden,true);await $('maker').onsubmit(submit);assert.equal($('output').hidden,true);assert.match($('makeStatus').textContent,/最大123バイト/);
  $('hidden').value='SECRET';
+});
+test('48-byte Japanese message auto-selects 1x and keeps public QR readable',async()=>{
+ $('public').value='https://masato-lab.pages.dev/';
+ $('hidden').value='あ'.repeat(16);
+ $('hidden').dispatchEvent(new dom.window.Event('input',{bubbles:true}));
+ assert.match($('byteCount').textContent,/48 \\/ 123 bytes/);
+ assert.equal($('rep').value,'auto');
+ await $('maker').onsubmit(submit);
+ assert.match($('makeStatus').textContent,/1重・自動選択/);
+ assert.equal($('save').hidden,false);
+ assert.equal(document.querySelectorAll('#checks .success').length,3);
 });
 test('upload previous PNG, restore SECRET and reject wrong key',async()=>{
  const p=PNG.sync.read(fs.readFileSync('tests/legacy-0.png'));globalThis.createImageBitmap=async()=>new ImageData(new Uint8ClampedArray(p.data),p.width,p.height);
