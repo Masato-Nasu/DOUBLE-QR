@@ -2,6 +2,7 @@ import jsQR from 'jsqr';
 import {readBarcodes,prepareZXingModule,ZXING_WASM_VERSION} from 'zxing-wasm/reader';
 import {readGrid,N} from './core.js';
 import {readGridPacked} from './packed.js';
+import {readGridLarge,LARGE_N} from './large.js';
 export const DECODERS={zxing:'ZXing WASM '+ZXING_WASM_VERSION,jsqr:'jsQR 1.4.0'};
 export function configureReader(overrides){prepareZXingModule({overrides});}
 export function decodeJS(image){
@@ -25,10 +26,10 @@ export function project(corners,u,v){
  return {x:((p1.x-p0.x+g*p1.x)*u+(p3.x-p0.x+h*p3.x)*v+p0.x)/(g*u+h*v+1),y:((p1.y-p0.y+g*p1.y)*u+(p3.y-p0.y+h*p3.y)*v+p0.y)/(g*u+h*v+1)};
 }
 function grayImage(image){const gray=new Uint8Array(image.width*image.height),hist=new Uint32Array(256);let sum=0;for(let i=0;i<gray.length;i++){gray[i]=Math.round(image.data[i*4]*.299+image.data[i*4+1]*.587+image.data[i*4+2]*.114);hist[gray[i]]++;sum+=gray[i];}let weight=0,sumB=0,max=-1,threshold=128;for(let t=0;t<256;t++){weight+=hist[t];if(!weight)continue;const wF=gray.length-weight;if(!wF)break;sumB+=t*hist[t];const between=weight*wF*(sumB/weight-(sum-sumB)/wF)**2;if(between>max){max=between;threshold=t;}}return {gray,threshold};}
-export function sampleGrid(image,corners,thresholdOverride){
- const {gray,threshold}=grayImage(image),cut=thresholdOverride??threshold,{width,height}=image,grid=new Uint8Array(N*N);
+export function sampleGrid(image,corners,thresholdOverride,n=N){
+ const {gray,threshold}=grayImage(image),cut=thresholdOverride??threshold,{width,height}=image,grid=new Uint8Array(n*n);
  const value=(x,y)=>{x=Math.max(0,Math.min(width-1,x));y=Math.max(0,Math.min(height-1,y));const a=Math.floor(x),b=Math.floor(y),dx=x-a,dy=y-b;const p=(ix,iy)=>gray[Math.min(height-1,iy)*width+Math.min(width-1,ix)];return p(a,b)*(1-dx)*(1-dy)+p(a+1,b)*dx*(1-dy)+p(a,b+1)*(1-dx)*dy+p(a+1,b+1)*dx*dy;};
- for(let r=0;r<N;r++)for(let c=0;c<N;c++){const patches=[];for(const dy of [-.1,0,.1])for(const dx of [-.1,0,.1]){const p=project(corners,(c+.5+dx)/N,(r+.5+dy)/N);patches.push(value(p.x,p.y));}patches.sort((a,b)=>a-b);grid[r*N+c]=+(patches[4]<=cut);}
+ for(let r=0;r<n;r++)for(let c=0;c<n;c++){const patches=[];for(const dy of [-.1,0,.1])for(const dx of [-.1,0,.1]){const p=project(corners,(c+.5+dx)/n,(r+.5+dy)/n);patches.push(value(p.x,p.y));}patches.sort((a,b)=>a-b);grid[r*n+c]=+(patches[4]<=cut);}
  return grid;
 }
 // Camera images often contain module-level errors even when the normal QR
@@ -71,6 +72,8 @@ export async function recover(image,key,repetitions='auto',decoded){
  for(const code of candidates)for(const threshold of [undefined,128]){
   const grid=sampleGrid(image,code.corners,threshold);
   for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])for(const decode of [readGridPacked,readGrid])try{return await decode(code.public,grid,key,rep);}catch{}
+  const largeGrid=sampleGrid(image,code.corners,threshold,LARGE_N);
+  for(const rep of repetitions==='auto'?[1,3,5]:[Number(repetitions)])try{return await readGridLarge(code.public,largeGrid,key,rep);}catch{}
  }
  throw Error('表は読めましたが、裏を復元できません。鍵を確認し、画像を大きくするか正面から撮り直してください。');
 }
