@@ -1,5 +1,5 @@
-// DOUBLE QR cache 4373d40b5552; contains app assets only, never keys or messages.
-const CACHE='double-qr-pwa-4373d40b5552';
+// DOUBLE QR cache 9415b4be6acf; contains app assets only, never keys or messages.
+const CACHE='double-qr-pwa-9415b4be6acf';
 const ASSETS=["./DOUBLE-QR-v0.4-diagnostic.zip","./RESEARCH.md","./THIRD_PARTY_NOTICES.txt","./app.js","./icon.svg","./icons/apple-touch-icon.png","./icons/icon-192.png","./icons/icon-512.png","./icons/maskable-512.png","./index.html","./manifest.webmanifest","./refresh.html","./style.css","./vendor/zxing_reader.wasm"];
 const assetURLs=new Set(ASSETS.map(x=>new URL(x,self.registration.scope).href));
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);for(const asset of ASSETS){const url=new URL(asset,self.registration.scope);const response=await fetch(new Request(url,{cache:'reload',credentials:'same-origin'}));if(!response.ok||response.redirected)throw Error('Offline asset unavailable: '+asset);await cache.put(url,response);}})()));
