@@ -12,7 +12,7 @@ export async function createPadding(publicText,hidden,key,prepared,mask=0){
  const encrypted=payload.map((b,i)=>b^stream[i]);
  const header=Uint8Array.of(payload.length>>8,payload.length&255);
  const signed=concat(utf8('DQR-padding-v1'),utf8(publicText),header,encrypted);
- const tag=Uint8Array.from(await crypto.subtle.sign('HMAC',mac,signed)).slice(0,8);
+ const tag=new Uint8Array(await crypto.subtle.sign('HMAC',mac,signed)).slice(0,8);
  const bytes=concat(SIGNATURE,header,encrypted,tag);
  const ordinary=plainPad(publicText,mask);
  const buffer=dataBytes(ordinary.matrix,mask);
@@ -36,7 +36,7 @@ export async function readPadding(publicText,grid,key){
   const encrypted=bytes.slice(6,6+size),tag=bytes.slice(6+size,14+size);
   const {stream,mac}=await keys(publicText,key,size);
   const data=concat(utf8('DQR-padding-v1'),utf8(publicText),bytes.slice(4,6),encrypted);
-  const correct=Uint8Array.from(await crypto.subtle.sign('HMAC',mac,data));
+  const correct=new Uint8Array(await crypto.subtle.sign('HMAC',mac,data));
   let difference=0;
   for(let i=0;i<8;i++)difference|=correct[i]^tag[i];
   if(difference)throw Error('鍵またはデータが一致しません。');
