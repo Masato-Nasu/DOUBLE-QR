@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {prepareHidden} from '../src/compression.js';
 import {createPadding,readPadding} from '../src/pad-channel.js';
-import {padCapacity,PAD_N,plainPad,padInfo} from '../src/pad-matrix.js';
+import {padCapacity,PAD_N,plainPad,padInfo,paddingVersionsFor} from '../src/pad-matrix.js';
 import {pixels} from '../src/core.js';
-import {configureReader,decodeBoth,recover,verify} from '../src/reader.js';
+import {configureReader,decodeBoth,recover,verify,detectPaddingVersions} from '../src/reader.js';
 
 globalThis.ImageData=class {constructor(data,width,height){this.data=data;this.width=width;this.height=height;}};
 configureReader({wasmBinary:fs.readFileSync('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm')});
@@ -54,4 +54,19 @@ test('oversized compressed data is rejected instead of rendering unreadable QR',
  const packed=await prepareHidden(long,true);
  assert(packed.storedBytes>padCapacity(front));
  await assert.rejects(()=>createPadding(front,long,key,packed,1),/容量または鍵/);
+});
+
+test('dedicated scanner identifies variable-size QR and recovers secret from PNG',async()=>{
+ const front='https://masato-lab.pages.dev/',key='variable-detection';
+ for(const length of [40,320,850,1500]){
+  const hidden='x'.repeat(length),version=paddingVersionsFor(front,length)[0];
+  const q=await createPadding(front,hidden,key,null,0,version);
+  const p=pixels(q.matrix,8,4),img=new ImageData(p.data,p.width,p.height);
+  const codes=await decodeBoth(img),code=codes.zxing||codes.jsqr;
+  assert(code?.corners,`standard reader must locate V${version}`);
+  const guesses=detectPaddingVersions(img,code.corners);
+  assert(guesses.includes(version),`Version ${version} should be detected; guesses ${guesses}`);
+  assert.equal((await readPadding(front,q.matrix,key)).hidden,hidden);
+  assert.equal((await recover(img,key,'auto',codes)).hidden,hidden);
+ }
 });
