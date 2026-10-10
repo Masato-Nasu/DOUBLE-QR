@@ -64,11 +64,14 @@ export async function keys(publicText,key,n){
  const chunks=[];for(let i=0;i<Math.ceil(n/32);i++){const number=new Uint8Array(4);new DataView(number.buffer).setUint32(0,i);chunks.push(await hmac(mac,concat(utf8('stream'),number)));}
  return {stream:concat(...chunks).slice(0,n),mac};
 }
-export async function packet(publicText,hidden,key){
- const body=utf8(hidden);if(!body.length||body.length>255)throw Error('裏メッセージは1〜255バイトで入力してください。実際の保存容量は検査で決まります。');
- const {stream,mac}=await keys(publicText,key,body.length),enc=body.map((b,i)=>b^stream[i]),length=Uint8Array.of(body.length);
+export async function packetBytes(publicText,body,key){
+ if(!body.length||body.length>255)throw Error('保存する裏データは1〜255バイトにしてください。実際の容量は検査で決まります。');
+ const {stream,mac}=await keys(publicText,key,body.length),enc=body.map((v,i)=>v^stream[i]),length=Uint8Array.of(body.length);
  const tag=(await hmac(mac,concat(utf8('tag'),utf8(publicText),length,enc))).slice(0,8);
  return concat(length,enc,tag);
+}
+export async function packet(publicText,hidden,key){
+ return packetBytes(publicText,utf8(hidden),key);
 }
 export async function build(publicText,hidden,key,rep=1){
  if(!key)throw Error('鍵を入力してください。');if(key.length>1024)throw Error('鍵が長すぎます。');if(!REPS.includes(rep))throw Error('強度の値が不正です。');
